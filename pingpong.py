@@ -21,6 +21,7 @@ def pingpong_rsend(msg_size, iterations):
 
     for _ in range(iterations):
         if rank == 0:
+
             req = comm.Irecv(recv_buf, source=1)
             comm.Send(sync, dest=1)
             comm.Recv(sync, source=1)
@@ -36,9 +37,10 @@ def pingpong_rsend(msg_size, iterations):
     end = MPI.Wtime()
     return (end - start) / (2 * iterations)
 
-
+print(f"rank: {rank}")
 
 for s in sizes:
+    print(f"odpalam size {s}")
     t = pingpong_rsend(s, N)
     if rank == 0:
         print(f"size:{s:9d}  time:{t:.9e}")
