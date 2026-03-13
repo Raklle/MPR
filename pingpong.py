@@ -11,6 +11,7 @@ start = MPI.Wtime()
 
 for i in range(N):
     if rank == 0:
+        comm.Send(msg, dest=1)
         comm.Recv(msg, source=1)
     elif rank == 1:
         comm.Recv(msg, source=0)
