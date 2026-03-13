@@ -6,41 +6,44 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
-if size != 2:
-        print("Expected only two nodes")
-
 
 N = 100000
 sizes = [1, 8, 16]
 
 
-def pingpong_ready(msg_size, iterations):
-    buf = bytearray(msg_size)
+def pingpong_rsend(msg_size, iterations):
+    send_buf = bytearray(msg_size)
+    recv_buf = bytearray(msg_size)
+    sync = bytearray(1)
 
     comm.Barrier()
     start = MPI.Wtime()
 
-    if rank == 0:
-        for _ in range(iterations):
-            req = comm.irecv(source=1)
-            comm.Rsend(buf, dest=1)
-            req.wait()
-    else:
-        for _ in range(iterations):
-            req = comm.irecv(source=0)
-            req.wait()
-            comm.Rsend(buf, dest=0)
+    for _ in range(iterations):
+        if rank == 0:
+            req = comm.Irecv(recv_buf, source=1)
+            comm.Send(sync, dest=1)
+            comm.Recv(sync, source=1)
+            comm.Rsend(send_buf, dest=1)
+            req.Wait()
+        else:
+            req = comm.Irecv(recv_buf, source=0)
+            comm.Recv(sync, source=0)
+            comm.Send(sync, dest=0)
+            req.Wait()
+            comm.Rsend(send_buf, dest=0)
 
     end = MPI.Wtime()
     return (end - start) / (2 * iterations)
 
 
+
 for s in sizes:
-    t = pingpong_ready(s, N)
+    t = pingpong_rsend(s, N)
     if rank == 0:
         print(f"size:{s:9d}  time:{t:.9e}")
 
-lat = pingpong_ready(sizes[0], N)
+lat = pingpong_rsend(sizes[0], N)
 
 if rank == 0:
-    print("\nopoznienie:", f"{lat:.9e}", "s")
+    print("\ndelay:", f"{lat:.9e}", "s")
