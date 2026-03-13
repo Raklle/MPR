@@ -11,41 +11,32 @@ N = 100000
 sizes = [1, 8, 16]
 
 
-def pingpong_rsend(msg_size, iterations):
+def pingpong_ssend(msg_size, iterations):
     send_buf = bytearray(msg_size)
     recv_buf = bytearray(msg_size)
-    sync = bytearray(1)
 
     comm.Barrier()
     start = MPI.Wtime()
 
     for _ in range(iterations):
         if rank == 0:
-
-            req = comm.Irecv(recv_buf, source=1)
-            comm.Send(sync, dest=1)
-            comm.Recv(sync, source=1)
-            comm.Rsend(send_buf, dest=1)
-            req.Wait()
+            comm.Ssend(send_buf, dest=1)
+            comm.Recv(recv_buf, source=1)
         else:
-            req = comm.Irecv(recv_buf, source=0)
-            comm.Recv(sync, source=0)
-            comm.Send(sync, dest=0)
-            req.Wait()
-            comm.Rsend(send_buf, dest=0)
+            comm.Recv(recv_buf, source=0)
+            comm.Ssend(send_buf, dest=0)
 
     end = MPI.Wtime()
     return (end - start) / (2 * iterations)
 
-print(f"rank: {rank}")
+
 
 for s in sizes:
-    print(f"odpalam size {s}")
-    t = pingpong_rsend(s, N)
+    t = pingpong_ssend(s, N)
     if rank == 0:
-        print(f"size:{s:9d}  time:{t:.9e}")
+        print(f"{s:9d}  {t:.9e}")
 
-lat = pingpong_rsend(sizes[0], N)
+lat = pingpong_ssend(sizes[0], N)
 
 if rank == 0:
-    print("\ndelay:", f"{lat:.9e}", "s")
+    print("\nopoznienie:", f"{lat:.9e}", "s")
