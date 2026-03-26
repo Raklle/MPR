@@ -6,14 +6,14 @@ MACHINEFILE="./MPR/allnodes"
 BENCH="./MPR/pingpong.py"
 OUTDIR="./MPR/results"
 
-REPEATS=10
+REPEATS=3
 MIN_SIZE=1
 MAX_SIZE=1048576      # 1 MB
-ITER=10000
+ITER=1000
 WARMUP=100
 
-mkdir -p "$OUTDIR/ssend"
-mkdir -p "$OUTDIR/rsend"
+mkdir -p "$OUTDIR/ssend2"
+mkdir -p "$OUTDIR/rsend2"
 
 echo "[INFO] Starting measurements..."
 echo "[INFO] repeats=$REPEATS min=$MIN_SIZE max=$MAX_SIZE iter=$ITER warmup=$WARMUP"
