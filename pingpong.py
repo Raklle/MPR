@@ -4,28 +4,29 @@ import sys
 
 
 def eprint(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
+    print(*args, file=sys.stderr, flush=True, **kwargs)
 
 
 def usage():
     if MPI.COMM_WORLD.Get_rank() == 0:
         print(
             "Usage:\n"
-            "  mpiexec -machinefile ./allnodes -np 2 ./pingpong_safe.py <mode> <min_size> <max_size> <iterations> <warmup>\n\n"
+            "  mpiexec -machinefile ./MPR/allnodes -np 2 ./MPR/pingpong.py <mode> <min_size> <max_size> <iterations> <warmup>\n\n"
             "Modes:\n"
-            "  ssend | rsend\n"
+            "  send | ssend\n",
+            flush=True
         )
 
 
-def pingpong_ssend(comm, rank, msg, iterations, warmup):
-    # Warmup
+def pingpong_send(comm, rank, msg, iterations, warmup):
+    # Warmup (not measured)
     for _ in range(warmup):
         if rank == 0:
-            comm.ssend(msg, dest=1, tag=0)
+            comm.send(msg, dest=1, tag=0)
             _ = comm.recv(source=1, tag=1)
         else:
             data = comm.recv(source=0, tag=0)
-            comm.ssend(data, dest=0, tag=1)
+            comm.send(data, dest=0, tag=1)
 
     comm.Barrier()
 
@@ -34,11 +35,11 @@ def pingpong_ssend(comm, rank, msg, iterations, warmup):
 
     for _ in range(iterations):
         if rank == 0:
-            comm.ssend(msg, dest=1, tag=0)
+            comm.send(msg, dest=1, tag=0)
             _ = comm.recv(source=1, tag=1)
         else:
             data = comm.recv(source=0, tag=0)
-            comm.ssend(data, dest=0, tag=1)
+            comm.send(data, dest=0, tag=1)
 
     if rank == 0:
         t1 = MPI.Wtime()
@@ -46,36 +47,15 @@ def pingpong_ssend(comm, rank, msg, iterations, warmup):
     return None
 
 
-def pingpong_rsend(comm, rank, msg, iterations, warmup):
-    """
-    Ready send wymaga, by receive było już wystawione.
-    Dla bezpieczeństwa robimy mały handshake przez zwykłe send/recv.
-    To dodaje narzut, ale zapewnia poprawność semantyczną.
-    """
-
-    # Warmup
+def pingpong_ssend(comm, rank, msg, iterations, warmup):
+    # Warmup (not measured)
     for _ in range(warmup):
-        if rank == 1:
-            # rank 1 gotowy na odbiór
-            comm.send("ready0", dest=0, tag=100)
+        if rank == 0:
+            comm.ssend(msg, dest=1, tag=0)
+            _ = comm.recv(source=1, tag=1)
+        else:
             data = comm.recv(source=0, tag=0)
-
-            # rank 1 gotowy odesłać, ale rank 0 najpierw wystawi recv
-            token = comm.recv(source=0, tag=101)
-            if token != "ready1":
-                raise RuntimeError("Protocol error")
-            comm.rsend(data, dest=0, tag=1)
-
-        else:  # rank 0
-            token = comm.recv(source=1, tag=100)
-            if token != "ready0":
-                raise RuntimeError("Protocol error")
-            comm.rsend(msg, dest=1, tag=0)
-
-            # wystaw recv przez recv() i daj znać rank 1, że może rsend
-            req = comm.irecv(source=1, tag=1)
-            comm.send("ready1", dest=1, tag=101)
-            _ = req.wait()
+            comm.ssend(data, dest=0, tag=1)
 
     comm.Barrier()
 
@@ -83,24 +63,12 @@ def pingpong_rsend(comm, rank, msg, iterations, warmup):
         t0 = MPI.Wtime()
 
     for _ in range(iterations):
-        if rank == 1:
-            comm.send("ready0", dest=0, tag=100)
+        if rank == 0:
+            comm.ssend(msg, dest=1, tag=0)
+            _ = comm.recv(source=1, tag=1)
+        else:
             data = comm.recv(source=0, tag=0)
-
-            token = comm.recv(source=0, tag=101)
-            if token != "ready1":
-                raise RuntimeError("Protocol error")
-            comm.rsend(data, dest=0, tag=1)
-
-        else:  # rank 0
-            token = comm.recv(source=1, tag=100)
-            if token != "ready0":
-                raise RuntimeError("Protocol error")
-            comm.rsend(msg, dest=1, tag=0)
-
-            req = comm.irecv(source=1, tag=1)
-            comm.send("ready1", dest=1, tag=101)
-            _ = req.wait()
+            comm.ssend(data, dest=0, tag=1)
 
     if rank == 0:
         t1 = MPI.Wtime()
@@ -115,7 +83,7 @@ def main():
 
     if size != 2:
         if rank == 0:
-            print("Run with exactly 2 processes", file=sys.stderr, flush=True)
+            eprint("[ERROR] Run with exactly 2 processes")
         raise SystemExit(1)
 
     if len(sys.argv) != 6:
@@ -128,14 +96,13 @@ def main():
     iterations = int(sys.argv[4])
     warmup = int(sys.argv[5])
 
-    if mode not in ("ssend", "rsend"):
+    if mode not in ("send", "ssend"):
         if rank == 0:
-            print("Mode must be: ssend or rsend", file=sys.stderr, flush=True)
+            eprint("[ERROR] Mode must be: send or ssend")
         raise SystemExit(1)
 
     if rank == 0:
         print("mode,message_size_B,iterations,avg_rtt_s,one_way_latency_s,bandwidth_Mbit_s")
-        sys.stdout.flush()
 
     msg_size = min_size
     while msg_size <= max_size:
@@ -144,10 +111,10 @@ def main():
 
         msg = b"x" * msg_size
 
-        if mode == "ssend":
-            avg_rtt = pingpong_ssend(comm, rank, msg, iterations, warmup)
+        if mode == "send":
+            avg_rtt = pingpong_send(comm, rank, msg, iterations, warmup)
         else:
-            avg_rtt = pingpong_rsend(comm, rank, msg, iterations, warmup)
+            avg_rtt = pingpong_ssend(comm, rank, msg, iterations, warmup)
 
         if rank == 0:
             one_way_latency = avg_rtt / 2.0
@@ -156,9 +123,9 @@ def main():
 
             print(
                 f"{mode},{msg_size},{iterations},"
-                f"{avg_rtt:.12e},{one_way_latency:.12e},{bandwidth_Mbit_s:.6f}"
+                f"{avg_rtt:.12e},{one_way_latency:.12e},{bandwidth_Mbit_s:.6f}",
+                flush=True
             )
-            sys.stdout.flush()
 
         msg_size *= 2
 
