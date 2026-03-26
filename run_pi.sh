@@ -7,7 +7,7 @@ PROG="./MPR/mpi_pi"
 SRC="./MPR/mpi_pi.c"
 OUTDIR="./MPR/results_vcluster"
 
-REPEATS=5
+REPEATS=1
 MIN_P=1
 MAX_P=12
 
