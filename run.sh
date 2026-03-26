@@ -6,7 +6,7 @@ MACHINEFILE="./MPR/allnodes"
 BENCH="./MPR/pingpong.py"
 OUTDIR="./MPR/results"
 
-REPEATS=3
+REPEATS=9
 MIN_SIZE=1
 MAX_SIZE=1
 ITER=1000000
