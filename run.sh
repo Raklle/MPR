@@ -6,10 +6,10 @@ MACHINEFILE="./MPR/allnodes"
 BENCH="./MPR/pingpong.py"
 OUTDIR="./MPR/results"
 
-REPEATS=5
+REPEATS=3
 MIN_SIZE=1
 MAX_SIZE=1
-ITER=1000000
+ITER=10000
 WARMUP=100
 
 mkdir -p "$OUTDIR/send"
