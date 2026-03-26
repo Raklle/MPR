@@ -115,7 +115,7 @@ def main():
 
     if size != 2:
         if rank == 0:
-            print("Run with exactly 2 processes", file=sys.stderr)
+            print("Run with exactly 2 processes", file=sys.stderr, flush=True)
         raise SystemExit(1)
 
     if len(sys.argv) != 6:
@@ -130,7 +130,7 @@ def main():
 
     if mode not in ("ssend", "rsend"):
         if rank == 0:
-            print("Mode must be: ssend or rsend", file=sys.stderr)
+            print("Mode must be: ssend or rsend", file=sys.stderr, flush=True)
         raise SystemExit(1)
 
     if rank == 0:
@@ -140,7 +140,7 @@ def main():
     msg_size = min_size
     while msg_size <= max_size:
         if rank == 0:
-            eprint("[INFO] testing size =", msg_size, "B")
+            print("[INFO] testing size =", msg_size, "B", file=sys.stderr, flush=True)
 
         msg = b"x" * msg_size
 
