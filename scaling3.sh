@@ -13,9 +13,9 @@
 module purge
 module load gcc/12.2.0
 
-if [ ! -x ./bucket_sort_1 ] || [ bucket_sort_1.cpp -nt ./bucket_sort_1 ]; then
+if [ ! -x ./bucket_sort_3 ] || [ bucket_sort_3.cpp -nt ./bucket_sort_3 ]; then
     echo ">>> Kompilacja..." >&2
-    g++ -O2 -fopenmp -std=c++17 -Wall bucket_sort_1.cpp -o bucket_sort_1 || exit 1
+    g++ -O2 -fopenmp -std=c++17 -Wall bucket_sort_3.cpp -o bucket_sort_3 || exit 1
 fi
 
 export OMP_PROC_BIND=close
@@ -34,7 +34,7 @@ for T in $THREAD_LIST; do
     if [ "$T" -le "$SLURM_CPUS_PER_TASK" ]; then
         export OMP_NUM_THREADS=$T
         for R in $(seq 1 $REPEATS); do
-            OUTPUT=$(./bucket_sort_1 $N $N_BUCKETS)
+            OUTPUT=$(./bucket_sort_3 $N $N_BUCKETS)
 
             echo "$OUTPUT" | grep "^RESULT," | sed 's/^RESULT,//' | \
                 awk -v r=$R '{print $0","r}' >> "$CSV_FILE"

@@ -31,43 +31,56 @@ void fill_random(std::vector<double>& arr, double min_val, double max_val) {
 }
 
 
-// ===================== ALGORYTM 1 =====================
-void bucket_sort_algo1(std::vector<double>& arr,
-                       std::vector<std::vector<double>>& buckets,
-                       double min_val, double max_val) {
+// ===================== ALGORYTM 3 =====================
+// podział danych + lokalne kubełki + brak synchronizacji
+void bucket_distribute_algo3(const std::vector<double>& arr,
+                             std::vector<std::vector<std::vector<double>>>& local,
+                             double min_val, double max_val) {
 
     int T = omp_get_max_threads();
-    size_t nb = buckets.size();
+    size_t n = arr.size();
 
     double range = max_val - min_val;
-    double bucket_range = range / nb;
+    double bucket_range = range / T;
 
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
 
-        size_t start = min_val + tid * (nb / T);
-        size_t end   = (tid == T - 1) ? nb : (tid + 1) * (nb / T);
+        size_t start = tid * (n / T);
+        size_t end   = (tid == T - 1) ? n : (tid + 1) * (n / T);
 
-        for (size_t i = 0; i < arr.size(); ++i) {
+        for (size_t i = start; i < end; ++i) {
             double val = arr[i];
 
-            size_t idx = static_cast<size_t>((val - min_val) / bucket_range);
-            if (idx >= nb) idx = nb - 1;
+            size_t b = static_cast<size_t>((val - min_val) / bucket_range);
+            if (b >= (size_t)T) b = T - 1;
 
-            if (idx >= start && idx < end) {
-                buckets[idx].push_back(val);
-            }
+            local[tid][b].push_back(val);
         }
     }
 }
 
 
-// ===================== SORTOWANIE =====================
-void sort_buckets(std::vector<std::vector<double>>& buckets) {
-    #pragma omp parallel for schedule(dynamic, 16)
-    for (size_t i = 0; i < buckets.size(); ++i) {
-        std::sort(buckets[i].begin(), buckets[i].end());
+// ===================== MERGE + SORT =====================
+void merge_and_sort(std::vector<std::vector<std::vector<double>>>& local,
+                    std::vector<std::vector<double>>& merged) {
+
+    int T = omp_get_max_threads();
+
+    // merge kubełków (każdy wątek robi swój bucket)
+    #pragma omp parallel for schedule(static)
+    for (int b = 0; b < T; ++b) {
+
+        for (int t = 0; t < T; ++t) {
+            merged[b].insert(
+                merged[b].end(),
+                local[t][b].begin(),
+                local[t][b].end()
+            );
+        }
+
+        std::sort(merged[b].begin(), merged[b].end());
     }
 }
 
@@ -77,6 +90,7 @@ void write_back(std::vector<double>& arr,
                 const std::vector<std::vector<double>>& buckets) {
 
     size_t pos = 0;
+
     for (size_t i = 0; i < buckets.size(); ++i) {
         for (double v : buckets[i]) {
             arr[pos++] = v;
@@ -85,7 +99,7 @@ void write_back(std::vector<double>& arr,
 }
 
 
-// ===================== POMIAR CZASU =====================
+// ===================== POMIAR =====================
 struct PhaseTimes {
     double t_a = 0;
     double t_b = 0;
@@ -97,9 +111,15 @@ struct PhaseTimes {
 
 // ===================== RUN =====================
 PhaseTimes run(std::vector<double>& arr, size_t nbuckets) {
+
     PhaseTimes t;
 
-    std::vector<std::vector<double>> buckets(nbuckets);
+    int T = omp_get_max_threads();
+
+    std::vector<std::vector<std::vector<double>>> local(T,
+        std::vector<std::vector<double>>(T));
+
+    std::vector<std::vector<double>> merged(T);
 
     // (a) losowanie
     double ta0 = omp_get_wtime();
@@ -108,19 +128,19 @@ PhaseTimes run(std::vector<double>& arr, size_t nbuckets) {
 
     double te0 = omp_get_wtime();
 
-    // (b) rozdział do kubełków
+    // (b) rozdział
     double tb0 = omp_get_wtime();
-    bucket_sort_algo1(arr, buckets, MIN_VAL, MAX_VAL);
+    bucket_distribute_algo3(arr, local, MIN_VAL, MAX_VAL);
     t.t_b = omp_get_wtime() - tb0;
 
-    // (c) sortowanie
+    // (c) merge + sort
     double tc0 = omp_get_wtime();
-    sort_buckets(buckets);
+    merge_and_sort(local, merged);
     t.t_c = omp_get_wtime() - tc0;
 
     // (d) zapis
     double td0 = omp_get_wtime();
-    write_back(arr, buckets);
+    write_back(arr, merged);
     t.t_d = omp_get_wtime() - td0;
 
     // (e) całość
@@ -138,8 +158,8 @@ int main(int argc, char** argv) {
 
     int nthreads = omp_get_max_threads();
 
-    std::cerr << "=== ALG1 (FULL SCAN) ===\n";
-    std::cerr << "N = " << N << "  buckets = " << N_BUCKETS
+    std::cerr << "=== ALG3 (LOCAL BUCKETS + MERGE) ===\n";
+    std::cerr << "N = " << N << " buckets = " << N_BUCKETS
               << " threads = " << nthreads << "\n";
 
     std::vector<double> arr(N);
@@ -149,7 +169,7 @@ int main(int argc, char** argv) {
     std::cerr << std::fixed << std::setprecision(4);
     std::cerr << "(a) losowanie:   " << t.t_a << " s\n";
     std::cerr << "(b) rozdzial:    " << t.t_b << " s\n";
-    std::cerr << "(c) sortowanie:  " << t.t_c << " s\n";
+    std::cerr << "(c) merge+sort:  " << t.t_c << " s\n";
     std::cerr << "(d) zapis:       " << t.t_d << " s\n";
     std::cerr << "(e) calosc:      " << t.t_e << " s\n";
 
